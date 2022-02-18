@@ -1,0 +1,105 @@
+import mdtraj as md
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+
+
+
+files=["2of3_5","2of3_5_tagged","2of3_native"]
+coordinate_files =[i+".inpcrd" for i in files]             #["2of3_5.inpcrd","2of3_5_tagged.inpcrd"]
+topology_files   =[i+".prmtop" for i in files]  
+
+
+
+row_n=len(files)
+col_n=4        #one column for each file, given that one file has normal AND tagged version
+
+fig, axs = plt.subplots(row_n,col_n)
+fig.suptitle('MD analysis for TIMED designs and native proteins')
+fig.set_size_inches(23, 10.5)
+
+for f in range(len(files)):
+    rmsd_list=[]
+    rmsf_list=[]
+    temp_list=[]
+    ener_list=[]
+    for i in range(col_n): axs[f,i].set_title(f'{files[f]}')
+    for i in range(10):
+        kwargs = {'alpha':0.3, 'label':f"Run #{i+1}"}
+        kwargs_avg = {'alpha':0.7, 'label':"Average", 'color':'red','linewidth':2}
+        # Plot RMSD
+        traj= md.load(f"{files[f]}_output_{i+1}.dcd",top=f"{files[f]}.prmtop")
+        
+        
+        # COMMENT/DELETE THIS!!!
+        if files[f]=="2of3_5_tagged":
+            traj= md.load(f"2of3_5_tagged_output_{i+1}.dcd",top="2of3_5_tagged.prmtop")
+            traj=traj.atom_slice(traj.topology.select('resid > 38'))  
+        
+#         print(f"File is {files[f]}_output_{i+1}.dcd: {traj}. Replica no_{i+1}, plot is {f+1}")
+        rmsd=md.rmsd(traj,traj,0)
+        rmsd_list.append(rmsd)
+        timestamps=[i*20/100 for i in range(len(rmsd))]
+        axs[f,0].plot(timestamps, rmsd, **kwargs)
+        
+        #Plot RMSF
+        ca_traj=traj.atom_slice(traj.topology.select('protein and name CA'))         
+        rmsf=md.rmsf(ca_traj,ca_traj,0)  
+        rmsf_list.append(rmsf)
+#         print(f"File is {files[f]}_output_{i+1}.dcd: {ca_traj}. Replica no_{i+1}, plot is {f+1}")
+        axs[f,1].set_title(f'{files[f]}')
+        axs[f,1].plot(rmsf, **kwargs)
+        
+        
+        # Plot Temperature
+        log=pd.read_csv(f"{files[f]}_log_{i+1}.txt", header = 0)   
+        temp=log["Temperature (K)"].tolist()
+        temp_list.append(temp)
+        axs[f,2].plot(timestamps, temp, **kwargs)
+        
+        # Plot Energy
+        log=pd.read_csv(f"{files[f]}_log_{i+1}.txt", header = 0)   
+        ener=log["Potential Energy (kJ/mole)"].tolist()
+        ener_list.append(ener)
+        axs[f,3].plot(timestamps, ener, **kwargs)
+        
+        if i==9:
+            
+            # Plot avg RMSD
+            arrays = [np.array(x) for x in rmsd_list]
+            avg_rmsd=[np.mean(k) for k in zip(*arrays)]
+            axs[f,0].plot(timestamps, avg_rmsd, **kwargs_avg)        
+            
+            # Plot avg RMSF
+            arrays = [np.array(x) for x in rmsf_list]
+            avg_rmsf=[np.mean(k) for k in zip(*arrays)]
+            axs[f,1].plot(avg_rmsf, **kwargs_avg)
+            
+            # Plot avg Temperature
+            arrays = [np.array(x) for x in temp_list]
+            avg_temp=[np.mean(k) for k in zip(*arrays)]
+            axs[f,2].plot(timestamps, avg_temp, **kwargs_avg)  
+            
+            # Plot avg Energy
+            arrays = [np.array(x) for x in ener_list]
+            avg_ener=[np.mean(k) for k in zip(*arrays)]
+            axs[f,3].plot(timestamps, avg_ener, **kwargs_avg)  
+            
+    
+    axs[f,0].set(xlabel='Time (ns)', ylabel='RMSD (nm)')
+    axs[f,1].set(xlabel='C-alpha atoms', ylabel='RMSF (nm)')
+    axs[f,2].set(xlabel='Time (ns)', ylabel='Temperature (K)')
+    axs[f,3].set(xlabel='Time (ns)', ylabel='Potential Energy (kJ/mole)')
+    
+# Fix the spacing between subplots
+handles, labels = axs[0,0].get_legend_handles_labels() # MUST USE SAME COLORING FOR ALL PLOTS
+fig.legend(handles, labels, bbox_to_anchor=(1.0, 1), borderaxespad=0.,bbox_transform=fig.transFigure)
+plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.3, hspace=0.4)
+
+# Share appropriate axes
+set_share_axes(axs[:,0], sharey=True, sharex=True)     
+set_share_axes(axs[:,1], sharey=True, sharex=True)
+set_share_axes(axs[:,2], sharey=True, sharex=True)
+
+plt.savefig('foo.png',dpi=300)
