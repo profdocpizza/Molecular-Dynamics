@@ -4,9 +4,29 @@ import numpy as np
 import pandas as pd
 
 
+def set_share_axes(axs, target=None, sharex=False, sharey=False):
+    if target is None:
+        target = axs.flat[0]
+    # Manage share using grouper objects
+    for ax in axs.flat:
+        if sharex:
+            target._shared_x_axes.join(target, ax)
+        if sharey:
+            target._shared_y_axes.join(target, ax)
+        ax.autoscale()
+    # Turn off x tick labels and offset text for all but the bottom row
+    if sharex and axs.ndim > 1:
+        for ax in axs[:-1,:].flat:
+            ax.xaxis.set_tick_params(which='both', labelbottom=False, labeltop=False)
+            ax.xaxis.offsetText.set_visible(False)
+    # Turn off y tick labels and offset text for all but the left most column
+    if sharey and axs.ndim > 1:
+        for ax in axs[:,1:].flat:
+            ax.yaxis.set_tick_params(which='both', labelleft=False, labelright=False)
+            ax.yaxis.offsetText.set_visible(False)
 
 
-files=["2of3_5","2of3_5_tagged","2of3_native"]
+files=["3ult_1","3ult_1_tagged"]
 coordinate_files =[i+".inpcrd" for i in files]             #["2of3_5.inpcrd","2of3_5_tagged.inpcrd"]
 topology_files   =[i+".prmtop" for i in files]  
 
@@ -33,10 +53,10 @@ for f in range(len(files)):
         
         
         # COMMENT/DELETE THIS!!!
-        if files[f]=="2of3_5_tagged":
-            traj= md.load(f"2of3_5_tagged_output_{i+1}.dcd",top="2of3_5_tagged.prmtop")
-            traj=traj.atom_slice(traj.topology.select('resid > 38'))  
-        
+        if files[f]=="3ult_1_tagged":
+#             traj= md.load(f"2of3_5_tagged_output_{i+1}.dcd",top="2of3_5_tagged.prmtop")
+            traj=traj.atom_slice(traj.topology.select('resid >= 38'))  
+        print(traj.topology)
 #         print(f"File is {files[f]}_output_{i+1}.dcd: {traj}. Replica no_{i+1}, plot is {f+1}")
         rmsd=md.rmsd(traj,traj,0)
         rmsd_list.append(rmsd)
@@ -101,5 +121,6 @@ plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.3, hs
 set_share_axes(axs[:,0], sharey=True, sharex=True)     
 set_share_axes(axs[:,1], sharey=True, sharex=True)
 set_share_axes(axs[:,2], sharey=True, sharex=True)
+set_share_axes(axs[:,3], sharey=True, sharex=True)
 
 plt.savefig('foo.png',dpi=300)
