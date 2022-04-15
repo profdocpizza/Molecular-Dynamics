@@ -1,0 +1,174 @@
+import mdtraj as md
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+
+proteins=["3ult_1","2of3_5"]
+
+row_n=len(proteins)
+col_n=4        #one column for each file, given that one file has normal AND tagged version
+
+fig, axs = plt.subplots(row_n,col_n)
+fig.set_size_inches(23, 10)
+fig.suptitle('MD analysis for TIMED designs and native proteins', y=1, fontsize=16)
+
+for p in range(len(proteins)):
+    files=[proteins[p],proteins[p]+"_tagged",proteins[p][0:4]+"_native"]
+
+
+    # files=["3ult_1","3ult_1_tagged","3ult_native"]
+    directory=files[0][0:4]
+    coordinate_files =[i+".inpcrd" for i in files]             #["2of3_5.inpcrd","2of3_5_tagged.inpcrd"]
+    topology_files   =[i+".prmtop" for i in files]  
+
+    for f in range(len(files)):
+        # make empty df
+
+        df = pd.DataFrame()
+
+        rmsd_list=[]
+        rmsf_list=[]
+        temp_list=[]
+        ener_list=[]
+        # for i in range(col_n): axs[f,i].set_title(f'{files[f]}')
+        for i in range(10): # UNIFINISHED - turn to 10 here
+            kwargs = {'alpha':0.3, 'label':f"Run #{i+1}"}
+            kwargs_avg = {'alpha':0.7, 'label':"Average", 'color':'red','linewidth':2}
+            # Plot RMSD
+            traj= md.load(f"{directory}\{files[f]}_output_{i+1}.dcd",top=f"{directory}\{files[f]}.prmtop")
+            
+            
+            # COMMENT/DELETE THIS!!!
+            if files[f].endswith("_tagged"):
+                # traj= md.load(f"2of3_5_tagged_output_{i+1}.dcd",top="2of3_5_tagged.prmtop")
+                traj=traj.atom_slice(traj.topology.select('resid >= 38'))  
+            # print(traj.topology)
+            # print(f"File is {files[f]}_output_{i+1}.dcd: {traj}. Replica no_{i+1}, plot is {f+1}")
+            rmsd=md.rmsd(traj,traj,0)
+            rmsd_list.append(rmsd)
+            timestamps=[i*20/100 for i in range(len(rmsd))]
+            # axs[f,0].plot(timestamps, rmsd, **kwargs)
+            
+            #Plot RMSF
+            ca_traj=traj.atom_slice(traj.topology.select('protein and name CA'))         
+            rmsf=md.rmsf(ca_traj,ca_traj,0)  
+            rmsf_list.append(rmsf)
+            # print(f"File is {files[f]}_output_{i+1}.dcd: {ca_traj}. Replica no_{i+1}, plot is {f+1}")
+            # axs[f,1].set_title(f'{files[f]}')
+            # axs[f,1].plot(rmsf, **kwargs)
+            
+            
+            # Plot Temperature
+            log=pd.read_csv(f"{directory}\{files[f]}_log_{i+1}.txt", header = 0)   
+            temp=log["Temperature (K)"].tolist()
+            temp_list.append(temp)
+            # axs[f,2].plot(timestamps, temp, **kwargs)
+            
+            # Plot Energy
+            log=pd.read_csv(f"{directory}\{files[f]}_log_{i+1}.txt", header = 0)   
+            ener=log["Potential Energy (kJ/mole)"].tolist()
+            ener_list.append(ener)
+            # axs[f,3].plot(timestamps, ener, **kwargs)
+            
+            
+
+            if i==9:
+                
+                # Plot avg RMSD
+                arrays = [np.array(x) for x in rmsd_list]
+                avg_rmsd=[np.mean(k) for k in zip(*arrays)]
+                # axs[f,0].plot(timestamps, avg_rmsd, **kwargs_avg)        
+                
+                # Plot avg RMSF
+                arrays = [np.array(x) for x in rmsf_list]
+                avg_rmsf=[np.mean(k) for k in zip(*arrays)]
+                # axs[f,1].plot(avg_rmsf, **kwargs_avg)
+                
+                # Plot avg Temperature
+                arrays = [np.array(x) for x in temp_list]
+                avg_temp=[np.mean(k) for k in zip(*arrays)]
+                # axs[f,2].plot(timestamps, avg_temp, **kwargs_avg)  
+                
+                # Plot avg Energy
+                arrays = [np.array(x) for x in ener_list]
+                avg_ener=[np.mean(k) for k in zip(*arrays)]
+                # axs[f,3].plot(timestamps, avg_ener, **kwargs_avg)  
+                
+        import seaborn as sns
+
+        # PLOT RMSD
+        plot_df = pd.DataFrame()
+        for i in range(len(rmsd_list)):
+            df = pd.DataFrame()
+            df[f"rmsd"]=rmsd_list[i]
+            df["timestamps"]=timestamps    
+            # append plot_df
+            plot_df = plot_df.append(df)
+        sns.lineplot(x="timestamps", y="rmsd", data=plot_df, label=files[f], ax=axs[p,0])
+        axs[p,0].set(xlabel='Time (ns)', ylabel='RMSD (nm)')
+        axs[p,0].set_title(f'RMSD comparison')
+
+        # PLOT RMSF
+        plot_df = pd.DataFrame()
+        for i in range(len(rmsf_list)):
+            df = pd.DataFrame()
+            df[f"rmsf"]=rmsf_list[i]
+            # df["timestamps"]=timestamps  
+            df["indexes"]=np.arange(len(rmsf_list[i]))
+            # append plot_df
+            plot_df = plot_df.append(df)
+        sns.lineplot(x="indexes", y="rmsf", data=plot_df, label=files[f], ax=axs[p,1])
+        axs[p,1].set(xlabel='C-alpha atoms', ylabel='RMSF (nm)')
+        axs[p,1].set_title(f'RMSF comparison')
+
+        # PLOT TEMPERATURE
+        plot_df = pd.DataFrame()
+        for i in range(len(temp_list)):
+            df = pd.DataFrame()
+            df[f"temp"]=temp_list[i]
+            df["timestamps"]=timestamps    
+            # append plot_df
+            plot_df = plot_df.append(df)
+        sns.lineplot(x="timestamps", y="temp", data=plot_df, label=files[f], ax=axs[p,2])
+        axs[p,2].set(xlabel='Time (ns)', ylabel='Temperature (K)')
+        axs[p,2].set_title(f'Temperature comparison')
+
+        # PLOT ENERGY
+        plot_df = pd.DataFrame()
+        for i in range(len(ener_list)):
+            df = pd.DataFrame()
+            df[f"ener"]=ener_list[i]
+            df["timestamps"]=timestamps    
+            # append plot_df
+            plot_df = plot_df.append(df)
+        sns.lineplot(x="timestamps", y="ener", data=plot_df, label=files[f], ax=axs[p,3])
+        axs[p,3].set(xlabel='Time (ns)', ylabel='Energy (kJ/mole)')
+        axs[p,3].set_title(f'Energy comparison')
+
+
+# Add text on the right side of the subplot
+for p in range(len(proteins)):
+    fig.text(0.93, 0.7-p*0.9/len(proteins), f'{proteins[p]}', fontsize=20)
+
+# Remove egends from all subplots
+for ax in axs[:,:].flat:
+    ax.legend().remove()
+# Fix the spacing between subplots
+handles, labels = axs[p,0].get_legend_handles_labels() # MUST USE SAME COLORING FOR ALL PLOTS
+# add custom labels to legend
+labels = [f"design", "tagged_design", "native"]
+fig.legend(handles, labels, bbox_to_anchor=(1.0, 0.9), borderaxespad=0.,bbox_transform=fig.transFigure,title="10 Replicate Simulations")
+plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.3, hspace=0.4)
+
+
+
+
+# Share appropriate axes
+set_share_axes(axs[:,0], sharey=True, sharex=True)     
+set_share_axes(axs[:,1], sharey=True)
+set_share_axes(axs[:,2], sharey=True, sharex=True)
+# set_share_axes(axs[:,3], sharey=True, sharex=True)
+# write explanation below whole plot
+
+plt.savefig('all_simulations.svg',dpi=300,bbox_inches='tight')
